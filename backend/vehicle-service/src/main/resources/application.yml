@@ -177,3 +177,4 @@ app:
     ice-emission-factor: 0.15 # kg CO2/km
     ev-emission-factor: 0.05 # kg CO2/km
     calculation-precision: 4
+

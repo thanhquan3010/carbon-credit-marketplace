@@ -13,3 +13,4 @@ public class InvalidTripDataException extends RuntimeException {
         super(message, cause);
     }
 }
+

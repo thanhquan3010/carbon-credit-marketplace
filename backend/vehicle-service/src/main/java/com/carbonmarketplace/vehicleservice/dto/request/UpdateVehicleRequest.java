@@ -45,3 +45,4 @@ public class UpdateVehicleRequest {
 
     private String notes;
 }
+

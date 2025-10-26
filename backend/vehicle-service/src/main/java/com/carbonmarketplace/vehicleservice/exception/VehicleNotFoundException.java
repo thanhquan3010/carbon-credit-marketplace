@@ -13,3 +13,4 @@ public class VehicleNotFoundException extends RuntimeException {
         super(message, cause);
     }
 }
+

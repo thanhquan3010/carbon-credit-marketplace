@@ -143,3 +143,4 @@ public interface VehicleRepository extends JpaRepository<Vehicle, UUID> {
     @Query("SELECT v FROM Vehicle v WHERE v.verificationStatus = 'PENDING' ORDER BY v.createdAt ASC")
     List<Vehicle> findPendingVerification();
 }
+

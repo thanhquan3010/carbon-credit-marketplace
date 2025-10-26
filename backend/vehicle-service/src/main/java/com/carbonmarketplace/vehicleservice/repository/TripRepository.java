@@ -185,3 +185,4 @@ public interface TripRepository extends JpaRepository<Trip, UUID> {
     @Query("SELECT t.externalTripId FROM Trip t WHERE t.externalTripId IN :externalTripIds")
     List<String> findExistingExternalTripIds(@Param("externalTripIds") List<String> externalTripIds);
 }
+

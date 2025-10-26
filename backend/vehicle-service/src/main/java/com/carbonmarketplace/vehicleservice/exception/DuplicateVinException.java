@@ -13,3 +13,4 @@ public class DuplicateVinException extends RuntimeException {
         super(message, cause);
     }
 }
+

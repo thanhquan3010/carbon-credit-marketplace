@@ -82,3 +82,4 @@ public class TripUploadRequest {
                java.time.Duration.between(startTime, endTime).toMinutes() >= 2;
     }
 }
+

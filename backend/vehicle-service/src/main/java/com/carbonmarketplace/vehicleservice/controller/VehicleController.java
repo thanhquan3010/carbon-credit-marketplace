@@ -318,3 +318,4 @@ public class VehicleController {
         return ResponseEntity.ok(ApiResponse.success("Retry initiated", result));
     }
 }
+

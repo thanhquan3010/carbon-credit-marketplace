@@ -234,3 +234,4 @@ public class Vehicle {
         this.syncStatus = SyncStatus.IN_PROGRESS;
     }
 }
+

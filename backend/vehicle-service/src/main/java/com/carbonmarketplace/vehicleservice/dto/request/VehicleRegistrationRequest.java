@@ -48,3 +48,4 @@ public class VehicleRegistrationRequest {
 
     private String notes;
 }
+

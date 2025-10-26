@@ -22,3 +22,4 @@ public class SchedulerConfig implements SchedulingConfigurer {
         taskRegistrar.setScheduler(scheduler);
     }
 }
+
