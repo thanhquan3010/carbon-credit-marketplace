@@ -150,7 +150,277 @@ services:
         condition: service_healthy
     networks:
       - carbon-network
-  # Add more microservices as needed...
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8081/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Vehicle Service
+  vehicle-service:
+    build: ./backend/vehicle-service
+    container_name: carbon-marketplace-vehicle-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SERVER_PORT: 8082
+      DB_URL: jdbc:postgresql://postgres:5432/carbon_marketplace
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      EUREKA_SERVER_URL: http://eureka-server:8761/eureka
+      JWT_SECRET: YourSuperSecretKeyForVehicleServiceThatIsAtLeast256BitsLong2025
+    ports:
+      - "8082:8082"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - carbon-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8082/api/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Carbon Credit Service
+  carbon-credit-service:
+    build: ./backend/carbon-credit-service
+    container_name: carbon-marketplace-carbon-credit-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: carbon_credits_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      JWT_SECRET: YourSuperSecretKeyForCarbonCreditServiceThatIsAtLeast256BitsLong2025
+      USER_SERVICE_URL: http://user-service:8081
+      VEHICLE_SERVICE_URL: http://vehicle-service:8082
+      NOTIFICATION_SERVICE_URL: http://notification-service:8084
+    ports:
+      - "8083:8083"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - carbon-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8083/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Marketplace Service
+  marketplace-service:
+    build: ./backend/marketplace-service
+    container_name: carbon-marketplace-marketplace-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: marketplace_db
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      ELASTICSEARCH_URI: http://elasticsearch:9200
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: 5672
+      RABBITMQ_USERNAME: admin
+      RABBITMQ_PASSWORD: admin
+      JWT_SECRET: YourSuperSecretKeyForMarketplaceServiceThatIsAtLeast256BitsLong2025
+    ports:
+      - "8084:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      elasticsearch:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - carbon-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8084/api/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Transaction Service
+  transaction-service:
+    build: ./backend/transaction-service
+    container_name: carbon-marketplace-transaction-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carbon_marketplace
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JWT_SECRET: YourSuperSecretKeyForTransactionServiceThatIsAtLeast256BitsLong2025
+    ports:
+      - "8085:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - carbon-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8085/api/transactions/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Notification Service
+  notification-service:
+    build: ./backend/notification-service
+    container_name: carbon-marketplace-notification-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carbon_credit_db
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      SPRING_RABBITMQ_HOST: rabbitmq
+      SPRING_RABBITMQ_PORT: 5672
+      SPRING_RABBITMQ_USERNAME: admin
+      SPRING_RABBITMQ_PASSWORD: admin
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+      JWT_SECRET: YourSuperSecretKeyForNotificationServiceThatIsAtLeast256BitsLong2025
+      MAIL_USERNAME: ${MAIL_USERNAME:-your-email@gmail.com}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-your-app-password}
+    ports:
+      - "8086:8084"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - carbon-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8084/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Payment Service
+  payment-service:
+    build: ./backend/payment-service
+    container_name: carbon-marketplace-payment-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: carbon_payments
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SERVER_PORT: 8085
+      JWT_SECRET: YourSuperSecretKeyForPaymentServiceThatIsAtLeast256BitsLong2025
+      MOMO_PARTNER_CODE: ${MOMO_PARTNER_CODE:-MOMOIQA420180417}
+      MOMO_ACCESS_KEY: ${MOMO_ACCESS_KEY:-F8BBA842ECF85}
+      MOMO_SECRET_KEY: ${MOMO_SECRET_KEY:-K951B6PE1waDMi640xX08PD3vg6EkVlz}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-CARBON01}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-KBTHCZMFWCBAQNHUYVGQIXBSRQZAOVFK}
+    ports:
+      - "8087:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - carbon-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8085/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Verification Service
+  verification-service:
+    build: ./backend/verification-service
+    container_name: carbon-marketplace-verification-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: carbon_marketplace
+      DB_USERNAME: postgres
+      DB_PASSWORD: postgres
+      SERVER_PORT: 8085
+      EUREKA_URL: http://eureka-server:8761/eureka/
+      KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-kafka:9092}
+    ports:
+      - "8089:8085"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - carbon-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8085/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Analytics Service
+  analytics-service:
+    build: ./backend/analytics-service
+    container_name: carbon-marketplace-analytics-service
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/carbon_marketplace
+      SPRING_DATASOURCE_USERNAME: postgres
+      SPRING_DATASOURCE_PASSWORD: postgres
+      SPRING_REDIS_HOST: redis
+      SPRING_REDIS_PORT: 6379
+      EUREKA_CLIENT_SERVICEURL_DEFAULTZONE: http://eureka-server:8761/eureka/
+    ports:
+      - "8088:8088"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      eureka-server:
+        condition: service_healthy
+    networks:
+      - carbon-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:8088/analytics/actuator/health" ]
+      interval: 30s
+      timeout: 10s
+      retries: 5
 
 networks:
   carbon-network:

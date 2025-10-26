@@ -6,27 +6,64 @@ A comprehensive platform that enables electric vehicle owners to convert their C
 
 ### Prerequisites
 
+- Docker 20.10+
+- Docker Compose 2.0+
+- At least 8GB RAM available
+- At least 20GB free disk space
+
+### Option 1: Docker Compose (Recommended)
+
+The easiest way to get started is using our automated scripts:
+
+**Windows (PowerShell):**
+```powershell
+.\start-services.ps1
+```
+
+**Linux/Mac:**
+```bash
+chmod +x start-services.sh
+./start-services.sh
+```
+
+**Manual Docker Compose:**
+```bash
+# Start all services
+docker-compose up -d
+
+# Or start step by step
+docker-compose up -d postgres redis elasticsearch rabbitmq
+docker-compose up -d eureka-server config-server api-gateway
+docker-compose up -d user-service vehicle-service carbon-credit-service marketplace-service
+```
+
+**Access Points:**
+- API Gateway: http://localhost:8080
+- Eureka Dashboard: http://localhost:8761
+- RabbitMQ Management: http://localhost:15672 (admin/admin)
+- User Service: http://localhost:8081
+- Vehicle Service: http://localhost:8082
+- All other services: See [DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)
+
+For detailed Docker deployment instructions, see **[DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)**
+
+### Option 2: Local Development Setup
+
+For active development with hot-reload:
+
+**Prerequisites:**
 - Java 17+
 - Node.js 18+
-- Docker & Docker Compose
 - Maven 3.8+
-- PostgreSQL 14+
-- Redis 7+
 
-### Development Setup
-
-1. **Clone the repository**
+1. **Clone and start infrastructure**
    ```bash
    git clone https://github.com/your-org/carbon-credit-marketplace.git
    cd carbon-credit-marketplace
-   ```
-
-2. **Start infrastructure services**
-   ```bash
    docker-compose up -d postgres redis elasticsearch rabbitmq
    ```
 
-3. **Start backend services**
+2. **Start backend services**
    ```bash
    cd backend
    # Start Eureka Server
@@ -42,18 +79,12 @@ A comprehensive platform that enables electric vehicle owners to convert their C
    cd ../user-service && mvn spring-boot:run
    ```
 
-4. **Start frontend**
+3. **Start frontend**
    ```bash
    cd frontend
    npm install
    npm run dev
    ```
-
-5. **Access the applications**
-   - Frontend: http://localhost:3000
-   - API Gateway: http://localhost:8080
-   - Eureka Dashboard: http://localhost:8761
-   - RabbitMQ Management: http://localhost:15672 (admin/admin)
 
 ## 📁 Project Structure
 
@@ -133,12 +164,19 @@ carbon-credit-marketplace/
 
 ## 📚 Documentation
 
+### Deployment & Operations
+- **[Docker Deployment Guide](DOCKER_DEPLOYMENT.md)** - Complete Docker setup instructions
+- [Cursor Instructions](project-docs/CURSOR_INSTRUCTIONS.md) - AI-assisted development guide
+
+### Project Documentation
 - [Project Overview](project-docs/README.md)
 - [Requirements](project-docs/REQUIREMENTS.md)
 - [User Stories](project-docs/USER_STORIES.md)
 - [API Documentation](project-docs/API_SPECS.md)
 - [Database Schema](project-docs/DATABASE_SCHEMA.md)
 - [System Architecture](project-docs/ARCHITECTURE.md)
+- [Implementation Phases](project-docs/IMPLEMENTATION_PHASES.md)
+- [Test Scenarios](project-docs/TEST_SCENARIOS.md)
 
 ## 🧪 Testing
 
@@ -162,14 +200,54 @@ npm run test:e2e
 
 ## 🚀 Deployment
 
-### Using Docker Compose (Development)
+### Docker Compose Deployment
+
+**Quick Start:**
 ```bash
-docker-compose up -d
+# Windows
+.\start-services.ps1
+
+# Linux/Mac
+./start-services.sh
 ```
 
-### Using Kubernetes (Production)
+**Stop Services:**
+```bash
+# Windows
+.\stop-services.ps1
+
+# Linux/Mac
+./stop-services.sh
+```
+
+**View Logs:**
+```bash
+docker-compose logs -f <service-name>
+```
+
+See detailed instructions in **[DOCKER_DEPLOYMENT.md](DOCKER_DEPLOYMENT.md)**
+
+### Kubernetes Deployment (Production)
 ```bash
 kubectl apply -f infrastructure/kubernetes/
+```
+
+### Environment Variables
+
+Create a `.env` file in the project root for configuration:
+
+```bash
+# Email Configuration
+MAIL_USERNAME=your-email@gmail.com
+MAIL_PASSWORD=your-app-password
+
+# Payment Gateway
+MOMO_PARTNER_CODE=your-code
+MOMO_ACCESS_KEY=your-key
+MOMO_SECRET_KEY=your-secret
+
+VNPAY_TMN_CODE=your-code
+VNPAY_HASH_SECRET=your-secret
 ```
 
 ## 📈 Monitoring
