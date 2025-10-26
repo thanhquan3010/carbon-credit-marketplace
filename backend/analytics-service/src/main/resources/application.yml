@@ -1,0 +1,180 @@
+server:
+  port: 8088
+  servlet:
+    context-path: /analytics
+
+spring:
+  application:
+    name: analytics-service
+  
+  datasource:
+    url: jdbc:postgresql://localhost:5432/carbon_marketplace
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+  
+  # Spring Batch configuration
+  batch:
+    job:
+      enabled: true
+    jdbc:
+      initialize-schema: always
+  
+  # Redis cache configuration
+  redis:
+    host: localhost
+    port: 6379
+    password: 
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+  
+  cache:
+    type: redis
+    redis:
+      time-to-live: 900000  # 15 minutes in milliseconds
+      cache-null-values: false
+  
+  # Async configuration
+  task:
+    execution:
+      pool:
+        core-size: 10
+        max-size: 20
+        queue-capacity: 500
+    scheduling:
+      pool:
+        size: 10
+  
+  # Cloud config
+  cloud:
+    config:
+      enabled: false
+  
+  # Security
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://localhost:8081/auth
+          jwk-set-uri: http://localhost:8081/auth/oauth2/jwks
+
+# Eureka client configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    enabled: true
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    hostname: localhost
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+
+# Analytics specific configuration
+analytics:
+  batch:
+    chunk-size: 1000
+    thread-pool-size: 5
+  
+  etl:
+    schedule:
+      metrics-calculation: "0 */15 * * * *"  # Every 15 minutes
+      daily-rollup: "0 0 1 * * *"            # Daily at 1 AM
+      weekly-rollup: "0 0 2 * * MON"         # Weekly on Monday at 2 AM
+      monthly-rollup: "0 0 3 1 * *"          # Monthly on 1st at 3 AM
+  
+  materialized-views:
+    refresh-interval: 900000  # 15 minutes
+    concurrent-refresh: true
+  
+  reports:
+    storage-path: /var/analytics/reports
+    retention-days: 30
+    max-concurrent-generations: 5
+    export-formats: PDF,EXCEL,CSV,JSON
+  
+  kpi:
+    calculation-window: 30  # days
+    trend-analysis-periods: 12
+    forecast-confidence: 0.95
+  
+  performance:
+    query-timeout: 30000  # 30 seconds
+    max-result-size: 10000
+    enable-query-cache: true
+  
+  timescale:
+    enabled: true
+    chunk-time-interval: 7  # days
+    compression:
+      enabled: true
+      after-days: 30
+    retention:
+      enabled: true
+      days: 365
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+  tracing:
+    sampling:
+      probability: 1.0
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    com.carbonmarketplace.analyticsservice: DEBUG
+    org.springframework.batch: INFO
+    org.springframework.data: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/analytics-service.log
+    max-size: 10MB
+    max-history: 30
+
+# Swagger/OpenAPI configuration
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
