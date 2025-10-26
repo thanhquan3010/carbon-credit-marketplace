@@ -1,0 +1,208 @@
+server:
+  port: 8084
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: notification-service
+  
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/carbon_credit_db
+    username: ccm_user
+    password: ccm_password
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 30000
+      maximum-pool-size: 10
+      minimum-idle: 2
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        show_sql: false
+        jdbc:
+          batch_size: 20
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+    open-in-view: false
+  
+  # RabbitMQ Configuration
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    virtual-host: /
+    listener:
+      simple:
+        acknowledge-mode: manual
+        concurrency: 2
+        max-concurrency: 5
+        prefetch: 1
+        retry:
+          enabled: true
+          initial-interval: 5000
+          max-attempts: 3
+          max-interval: 30000
+          multiplier: 2
+  
+  # Redis Configuration
+  redis:
+    host: localhost
+    port: 6379
+    password: 
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 10
+        max-idle: 5
+        min-idle: 2
+        max-wait: -1ms
+  
+  # Mail Configuration
+  mail:
+    host: smtp.gmail.com
+    port: 587
+    username: ${MAIL_USERNAME:your-email@gmail.com}
+    password: ${MAIL_PASSWORD:your-app-password}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+        debug: false
+  
+  # Security
+  security:
+    user:
+      name: admin
+      password: admin123
+
+# Eureka Client Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+  instance:
+    hostname: localhost
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+
+# RabbitMQ Custom Configuration
+rabbitmq:
+  exchange:
+    notification: notification.exchange
+  queue:
+    email: notification.email.queue
+    sms: notification.sms.queue
+    push: notification.push.queue
+    in-app: notification.in-app.queue
+  routing:
+    email: notification.email
+    sms: notification.sms
+    push: notification.push
+    in-app: notification.in-app
+
+# SendGrid Configuration
+sendgrid:
+  enabled: ${SENDGRID_ENABLED:false}
+  api-key: ${SENDGRID_API_KEY:your-sendgrid-api-key}
+
+# Twilio Configuration
+twilio:
+  enabled: ${TWILIO_ENABLED:false}
+  account-sid: ${TWILIO_ACCOUNT_SID:your-twilio-account-sid}
+  auth-token: ${TWILIO_AUTH_TOKEN:your-twilio-auth-token}
+  from-number: ${TWILIO_FROM_NUMBER:+1234567890}
+
+# Firebase Configuration
+firebase:
+  enabled: ${FIREBASE_ENABLED:false}
+  config-file: firebase-config.json
+  project-id: ${FIREBASE_PROJECT_ID:carbon-credit-marketplace}
+
+# Email Configuration
+email:
+  from:
+    address: noreply@carbonmarketplace.com
+    name: Carbon Credit Marketplace
+  reply-to: support@carbonmarketplace.com
+
+# Notification Service Configuration
+notification:
+  retry:
+    enabled: true
+    max-attempts: 3
+    base-delay-minutes: 5
+    check-interval: 60000 # 1 minute in milliseconds
+  expiry:
+    check-interval: 3600000 # 1 hour in milliseconds
+  cleanup:
+    cron: "0 0 2 * * ?" # Daily at 2 AM
+
+# JWT Configuration
+jwt:
+  secret: ${JWT_SECRET:your-256-bit-secret-key-for-jwt-token-generation-keep-it-secure}
+  expiration: 3600000 # 1 hour
+  refresh-expiration: 604800000 # 7 days
+
+# Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.carbonmarketplace.notificationservice: DEBUG
+    org.springframework.amqp: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/notification-service.log
+    max-size: 10MB
+    max-history: 30
+
+# OpenAPI/Swagger Configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  show-actuator: true
+
+# Application Configuration
+app:
+  name: Notification Service
+  version: 1.0.0
+  description: Multi-channel notification service for Carbon Credit Marketplace

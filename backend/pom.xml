@@ -5,8 +5,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>com.carbonmarketplace</groupId>
-    <artifactId>carbon-marketplace-parent</artifactId>
-    <version>1.0.0</version>
+    <artifactId>carbon-credit-marketplace-backend</artifactId>
+    <version>1.0.0-SNAPSHOT</version>
     <packaging>pom</packaging>
     <name>Carbon Marketplace Parent</name>
     <description>Parent POM for Carbon Credit Marketplace Microservices</description>

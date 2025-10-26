@@ -1,0 +1,179 @@
+spring:
+  application:
+    name: vehicle-service
+  
+  # Database configuration
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/carbon_marketplace}
+    username: ${DB_USERNAME:carbon_user}
+    password: ${DB_PASSWORD:carbon_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  # JPA/Hibernate configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+    show-sql: false
+    open-in-view: false
+  
+  # File upload configuration
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 10MB
+      enabled: true
+  
+  # Security configuration
+  security:
+    jwt:
+      secret: ${JWT_SECRET:your-secret-key-here-change-in-production}
+      expiration: 86400000 # 24 hours
+  
+  # Cloud configuration
+  cloud:
+    config:
+      enabled: false
+      uri: ${CONFIG_SERVER_URL:http://localhost:8888}
+  
+  # Scheduling
+  task:
+    scheduling:
+      pool:
+        size: 10
+      thread-name-prefix: vehicle-scheduler-
+
+# Server configuration
+server:
+  port: ${SERVER_PORT:8082}
+  servlet:
+    context-path: /api
+  error:
+    include-message: always
+    include-binding-errors: always
+
+# Eureka configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
+    enabled: false # Set to true when Eureka server is available
+  instance:
+    prefer-ip-address: true
+    instance-id: ${spring.application.name}:${server.port}
+
+# Management endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    tags:
+      application: ${spring.application.name}
+
+# Logging configuration
+logging:
+  level:
+    root: INFO
+    com.carbonmarketplace.vehicleservice: DEBUG
+    org.springframework.web: INFO
+    org.hibernate: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/vehicle-service.log
+    max-size: 10MB
+    max-history: 30
+
+# Swagger/OpenAPI configuration
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    tags-sorter: alpha
+    operations-sorter: alpha
+  show-actuator: true
+
+# VinFast API configuration (mock for now)
+vinfast:
+  api:
+    url: ${VINFAST_API_URL:https://api.vinfast.vn}
+    key: ${VINFAST_API_KEY:mock-api-key}
+    secret: ${VINFAST_API_SECRET:mock-api-secret}
+    timeout:
+      connect: 5000
+      read: 30000
+
+# Sync scheduler configuration
+sync:
+  scheduler:
+    enabled: ${SYNC_SCHEDULER_ENABLED:true}
+    batch-size: ${SYNC_BATCH_SIZE:50}
+    retry-failed: true
+    cron:
+      daily: "0 0 2 * * ?" # Daily at 2 AM
+      hourly: "0 15 * * * ?" # Every hour at 15 minutes
+      retry: "0 0 */6 * * ?" # Every 6 hours
+      cleanup: "0 0 3 ? * SUN" # Every Sunday at 3 AM
+    hourly:
+      enabled: false
+    health-check:
+      enabled: false
+      delay: 300000 # 5 minutes
+    cleanup:
+      enabled: false
+      retention-days: 365
+
+# Feign client configuration
+feign:
+  client:
+    config:
+      default:
+        connectTimeout: 5000
+        readTimeout: 5000
+        loggerLevel: full
+  compression:
+    request:
+      enabled: true
+    response:
+      enabled: true
+
+# Application-specific configuration
+app:
+  vehicle:
+    max-vehicles-per-user: 10
+    vin-validation-enabled: true
+  trip:
+    batch-upload-max-size: 1000
+    validation:
+      min-distance-km: 0.1
+      max-distance-km: 500
+      max-avg-speed-kmh: 180
+      min-duration-minutes: 2
+  carbon:
+    ice-emission-factor: 0.15 # kg CO2/km
+    ev-emission-factor: 0.05 # kg CO2/km
+    calculation-precision: 4

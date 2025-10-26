@@ -1,0 +1,150 @@
+server:
+  port: 8083
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: carbon-credit-service
+  
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:carbon_credits_db}
+    username: ${DB_USERNAME:carbon_user}
+    password: ${DB_PASSWORD:carbon_pass}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+  
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+    show-sql: ${SHOW_SQL:false}
+  
+  liquibase:
+    enabled: ${LIQUIBASE_ENABLED:false}
+    change-log: classpath:db/changelog/db.changelog-master.xml
+  
+  cloud:
+    openfeign:
+      client:
+        config:
+          default:
+            connectTimeout: 5000
+            readTimeout: 5000
+            loggerLevel: basic
+  
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://localhost:8081}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://localhost:8081/.well-known/jwks.json}
+
+# Carbon Credit Configuration
+carbon:
+  calculation:
+    ice-emission-factor: 0.15  # kg CO2 per km for ICE vehicles
+    ev-emission-factor: 0.05   # kg CO2 per km for EV vehicles
+    accuracy-tolerance: 0.02   # ±2% tolerance
+    
+  verification:
+    max-pending-requests: 5
+    min-trips: 10
+    min-distance-km: 100
+    sla-days:
+      high: 3
+      normal: 7
+      low: 14
+    
+  wallet:
+    max-transaction-amount: 1000  # tons
+    min-transaction-amount: 0.01  # tons
+    
+  credits:
+    serial-number-prefix: VN-EV
+    default-methodology: CDM ACM0018
+    default-region: Vietnam
+    vintage-year-offset: 0
+
+# API Documentation
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+  show-actuator: false
+
+# Actuator
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info, metrics, prometheus
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+
+# Logging
+logging:
+  level:
+    root: ${LOG_LEVEL:INFO}
+    com.carbonmarketplace.carboncreditservice: ${APP_LOG_LEVEL:DEBUG}
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:DEBUG}
+    org.hibernate.type.descriptor.sql: ${SQL_LOG_LEVEL:TRACE}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/carbon-credit-service.log
+    max-size: 10MB
+    max-history: 30
+
+# JWT Security
+jwt:
+  secret: ${JWT_SECRET:YourSuperSecretKeyForCarbonCreditServiceThatIsAtLeast256BitsLong2025}
+  expiration: 3600000  # 1 hour
+  refresh-expiration: 604800000  # 7 days
+
+# Feign Clients
+feign:
+  client:
+    config:
+      user-service:
+        url: ${USER_SERVICE_URL:http://localhost:8081}
+        connectTimeout: 5000
+        readTimeout: 5000
+      vehicle-service:
+        url: ${VEHICLE_SERVICE_URL:http://localhost:8082}
+        connectTimeout: 5000
+        readTimeout: 5000
+
+# Service URLs
+service:
+  user:
+    url: ${USER_SERVICE_URL:http://localhost:8081}
+  vehicle:
+    url: ${VEHICLE_SERVICE_URL:http://localhost:8082}
+  notification:
+    url: ${NOTIFICATION_SERVICE_URL:http://localhost:8084}
