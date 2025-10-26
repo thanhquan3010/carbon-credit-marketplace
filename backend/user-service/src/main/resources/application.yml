@@ -37,6 +37,39 @@ spring:
       secret: ${JWT_SECRET:your-secret-key-for-development-only}
       expiration: 900000 # 15 minutes
       refresh-expiration: 604800000 # 7 days
+  
+  mail:
+    host: ${MAIL_HOST:smtp.gmail.com}
+    port: ${MAIL_PORT:587}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:noreply@carbonmarketplace.com}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connection-timeout: 5000
+          timeout: 5000
+          write-timeout: 5000
+  
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+
+aws:
+  s3:
+    bucket-name: ${AWS_S3_BUCKET:carbon-marketplace-kyc}
+    region: ${AWS_REGION:ap-southeast-1}
+  access-key: ${AWS_ACCESS_KEY:}
+  secret-key: ${AWS_SECRET_KEY:}
+
+app:
+  frontend:
+    url: ${FRONTEND_URL:http://localhost:3000}
 
 server:
   port: 8081
