@@ -1,0 +1,238 @@
+spring:
+  application:
+    name: payment-service
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+    
+  datasource:
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:carbon_payments}
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:postgres}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      connection-timeout: 20000
+      maximum-pool-size: 10
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      auto-commit: false
+      
+  jpa:
+    hibernate:
+      ddl-auto: ${JPA_DDL_AUTO:update}
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+    show-sql: ${SHOW_SQL:false}
+    open-in-view: false
+    
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DB:0}
+    timeout: 2000
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        
+  cloud:
+    discovery:
+      enabled: false  # Enable when using Eureka
+      
+server:
+  port: ${SERVER_PORT:8085}
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: always
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        
+logging:
+  level:
+    root: INFO
+    com.carbonmarketplace.paymentservice: ${LOG_LEVEL:DEBUG}
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: ${SQL_LOG_LEVEL:INFO}
+    org.hibernate.type.descriptor.sql: ${SQL_LOG_LEVEL:INFO}
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/payment-service.log
+    max-size: 10MB
+    max-history: 30
+
+# Payment Gateway Configuration
+payment:
+  platform:
+    fee-percentage: ${PLATFORM_FEE_PERCENTAGE:5}
+    
+  idempotency:
+    ttl-hours: ${IDEMPOTENCY_TTL_HOURS:24}
+    
+  momo:
+    partner-code: ${MOMO_PARTNER_CODE:MOMOIQA420180417}
+    access-key: ${MOMO_ACCESS_KEY:F8BBA842ECF85}
+    secret-key: ${MOMO_SECRET_KEY:K951B6PE1waDMi640xX08PD3vg6EkVlz}
+    environment: ${MOMO_ENVIRONMENT:test}
+    
+  vnpay:
+    tmn-code: ${VNPAY_TMN_CODE:CARBON01}
+    hash-secret: ${VNPAY_HASH_SECRET:KBTHCZMFWCBAQNHUYVGQIXBSRQZAOVFK}
+    environment: ${VNPAY_ENVIRONMENT:sandbox}
+    refund-url: ${VNPAY_REFUND_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
+    
+  bank:
+    account-name: ${BANK_ACCOUNT_NAME:Carbon Credit Marketplace}
+    master-account: ${BANK_MASTER_ACCOUNT:1234567890}
+    transfer-timeout-hours: ${BANK_TRANSFER_TIMEOUT_HOURS:48}
+    
+  stripe:
+    secret-key: ${STRIPE_SECRET_KEY:sk_test_51234567890}
+    webhook-secret: ${STRIPE_WEBHOOK_SECRET:whsec_1234567890}
+    
+# Security Configuration
+security:
+  jwt:
+    secret: ${JWT_SECRET:mySecretKey12345678901234567890123456789012345678901234567890}
+    expiration: ${JWT_EXPIRATION:86400000}
+    
+# Scheduled Tasks
+scheduled:
+  enabled: ${SCHEDULED_TASKS_ENABLED:true}
+  payout:
+    cron: ${PAYOUT_CRON:0 0 10,15 * * ?}  # Run at 10 AM and 3 PM daily
+  expired-payments:
+    cron: ${EXPIRED_PAYMENTS_CRON:0 */30 * * * ?}  # Every 30 minutes
+  webhook-retry:
+    cron: ${WEBHOOK_RETRY_CRON:0 */15 * * * ?}  # Every 15 minutes
+    
+# API Documentation
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    try-it-out-enabled: true
+    operations-sorter: method
+    tags-sorter: alpha
+    display-request-duration: true
+    
+# Resilience4j Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      payment-gateway:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        event-consumer-buffer-size: 10
+        
+  retry:
+    instances:
+      payment-gateway:
+        max-attempts: 3
+        wait-duration: 1s
+        retry-exceptions:
+          - java.io.IOException
+          - java.net.SocketTimeoutException
+          
+  ratelimiter:
+    instances:
+      payment-api:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 5s
+
+---
+# Development Profile
+spring:
+  config:
+    activate:
+      on-profile: dev
+      
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: true
+    
+logging:
+  level:
+    com.carbonmarketplace.paymentservice: DEBUG
+    org.hibernate.SQL: DEBUG
+    
+---
+# Production Profile
+spring:
+  config:
+    activate:
+      on-profile: prod
+      
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    
+  redis:
+    cluster:
+      nodes: ${REDIS_CLUSTER_NODES:}
+      
+logging:
+  level:
+    com.carbonmarketplace.paymentservice: INFO
+    org.hibernate.SQL: WARN
+    
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,metrics,prometheus
+        
+---
+# Test Profile
+spring:
+  config:
+    activate:
+      on-profile: test
+      
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+    
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    database-platform: org.hibernate.dialect.H2Dialect
+    
+  redis:
+    host: localhost
+    port: 6379
