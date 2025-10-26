@@ -1,5 +1,6 @@
 // services/authService.ts
 import { apiClient } from './api';
+import { tokenManager } from './tokenManager';
 
 export interface LoginRequest {
     email: string;
@@ -66,29 +67,52 @@ export interface PasswordResetConfirmRequest {
 export const authService = {
     // Login
     login: async (email: string, password: string): Promise<LoginResponse> => {
-        return await apiClient.post<LoginResponse>('/auth/login', { email, password });
+        const response = await apiClient.post<LoginResponse>('/auth/login', { email, password });
+
+        // Store tokens with expiration tracking
+        if (response.token && response.refreshToken) {
+            const expiresIn = 900; // Default 15 minutes if not provided
+            tokenManager.setTokens(response.token, response.refreshToken, expiresIn);
+        }
+
+        return response;
     },
 
     // Register
     register: async (data: RegisterRequest): Promise<RegisterResponse> => {
-        return await apiClient.post<RegisterResponse>('/auth/register', data);
+        const response = await apiClient.post<RegisterResponse>('/auth/register', data);
+
+        // Store tokens with expiration tracking
+        if (response.token && response.refreshToken) {
+            const expiresIn = 900; // Default 15 minutes if not provided
+            tokenManager.setTokens(response.token, response.refreshToken, expiresIn);
+        }
+
+        return response;
     },
 
     // Logout
     logout: async (): Promise<void> => {
         try {
-            await apiClient.post('/auth/logout');
+            const refreshToken = tokenManager.getRefreshToken();
+            await apiClient.post('/auth/logout', { refreshToken });
         } catch (error) {
-            // Silent fail, clear local storage anyway
+            // Silent fail, clear tokens anyway
         } finally {
-            localStorage.removeItem('token');
-            localStorage.removeItem('refreshToken');
+            tokenManager.clearTokens();
+            tokenManager.stopTokenMonitoring();
         }
     },
 
-    // Refresh token
+    // Refresh token (manual refresh)
     refreshToken: async (refreshToken: string): Promise<string> => {
-        const response = await apiClient.post<{ token: string }>('/auth/refresh', { refreshToken });
+        const response = await apiClient.post<{ token: string; refreshToken: string; expiresIn: number }>('/auth/refresh', { refreshToken });
+
+        // Update tokens with new values
+        if (response.token && response.refreshToken) {
+            tokenManager.setTokens(response.token, response.refreshToken, response.expiresIn || 900);
+        }
+
         return response.token;
     },
 

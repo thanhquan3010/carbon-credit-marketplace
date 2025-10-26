@@ -115,4 +115,19 @@ public class AuthController {
 
         return ResponseEntity.ok(ApiResponse.success("Verification email sent", null));
     }
+
+    @GetMapping("/token/status")
+    @Operation(summary = "Check token expiration status", description = "Get information about token expiration time")
+    public ResponseEntity<ApiResponse<com.carbonmarketplace.userservice.dto.response.TokenExpirationResponse>> checkTokenStatus(
+            @RequestHeader("Authorization") String authHeader) {
+
+        log.info("Token status check requested");
+
+        String token = authHeader.replace("Bearer ", "");
+
+        com.carbonmarketplace.userservice.dto.response.TokenExpirationResponse status = authService
+                .checkTokenExpiration(token);
+
+        return ResponseEntity.ok(ApiResponse.success("Token status retrieved", status));
+    }
 }

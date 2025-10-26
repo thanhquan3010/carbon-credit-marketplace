@@ -1,5 +1,6 @@
 // services/api.ts
 import axios, { AxiosInstance, AxiosRequestConfig, AxiosResponse } from 'axios';
+import { tokenManager } from './tokenManager';
 
 // Create axios instance with default config
 const api: AxiosInstance = axios.create({
@@ -10,10 +11,26 @@ const api: AxiosInstance = axios.create({
     },
 });
 
-// Request interceptor to add auth token
+// Request interceptor to add auth token and proactively refresh if needed
 api.interceptors.request.use(
-    (config) => {
-        const token = localStorage.getItem('token');
+    async (config) => {
+        // Skip token refresh for auth endpoints to avoid infinite loops
+        const isAuthEndpoint = config.url?.includes('/auth/login') ||
+            config.url?.includes('/auth/register') ||
+            config.url?.includes('/auth/refresh');
+
+        if (!isAuthEndpoint) {
+            // Proactively refresh token if it's about to expire (< 60 seconds)
+            try {
+                await tokenManager.refreshTokenIfNeeded();
+            } catch (error) {
+                console.error('[API] Token refresh failed in request interceptor:', error);
+                // Let the request continue, response interceptor will handle 401
+            }
+        }
+
+        // Add current token to request
+        const token = tokenManager.getToken();
         if (token) {
             config.headers.Authorization = `Bearer ${token}`;
         }
@@ -30,34 +47,29 @@ api.interceptors.response.use(
     async (error) => {
         const originalRequest = error.config;
 
-        // Handle 401 errors (unauthorized)
+        // Handle 401 errors (unauthorized) - fallback if proactive refresh failed
         if (error.response?.status === 401 && !originalRequest._retry) {
             originalRequest._retry = true;
 
-            const refreshToken = localStorage.getItem('refreshToken');
-            if (refreshToken) {
-                try {
-                    const response = await axios.post(
-                        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8080/api'}/auth/refresh`,
-                        { refreshToken }
-                    );
+            console.log('[API] 401 error - attempting token refresh');
 
-                    const { token } = response.data;
-                    localStorage.setItem('token', token);
+            try {
+                // Try to refresh the token
+                const newToken = await tokenManager.refreshTokenIfNeeded();
 
+                if (newToken) {
                     // Retry original request with new token
-                    originalRequest.headers.Authorization = `Bearer ${token}`;
+                    originalRequest.headers.Authorization = `Bearer ${newToken}`;
                     return api(originalRequest);
-                } catch (refreshError) {
-                    // Refresh failed, redirect to login
-                    localStorage.removeItem('token');
-                    localStorage.removeItem('refreshToken');
-                    window.location.href = '/auth/login';
-                    return Promise.reject(refreshError);
                 }
-            } else {
-                // No refresh token, redirect to login
-                window.location.href = '/auth/login';
+            } catch (refreshError) {
+                console.error('[API] Token refresh failed in response interceptor:', refreshError);
+                // Refresh failed, clear tokens and redirect to login
+                tokenManager.clearTokens();
+                if (typeof window !== 'undefined') {
+                    window.location.href = '/auth/login';
+                }
+                return Promise.reject(refreshError);
             }
         }
 

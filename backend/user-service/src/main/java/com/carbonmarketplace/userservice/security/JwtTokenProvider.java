@@ -137,4 +137,34 @@ public class JwtTokenProvider {
         final Date expiration = getExpirationDateFromToken(token);
         return expiration.before(new Date());
     }
+
+    /**
+     * Get remaining time until token expires (in seconds)
+     */
+    public long getRemainingTimeInSeconds(String token) {
+        try {
+            Date expiration = getExpirationDateFromToken(token);
+            long now = new Date().getTime();
+            long expiryTime = expiration.getTime();
+            return Math.max(0, (expiryTime - now) / 1000);
+        } catch (Exception e) {
+            log.error("Error getting remaining time from token", e);
+            return 0;
+        }
+    }
+
+    /**
+     * Check if token will expire soon (within threshold seconds)
+     */
+    public boolean isTokenExpiringSoon(String token, long thresholdSeconds) {
+        long remainingTime = getRemainingTimeInSeconds(token);
+        return remainingTime > 0 && remainingTime < thresholdSeconds;
+    }
+
+    /**
+     * Check if token should be refreshed (expires within 60 seconds)
+     */
+    public boolean shouldRefreshToken(String token) {
+        return isTokenExpiringSoon(token, 60);
+    }
 }

@@ -710,7 +710,7 @@ export const useAuctionWebSocket = (listingId: string) => {
 
 ---
 
-## Testing Strategy
+## 5: Testing Strategy
 
 ### Unit Testing Template
 
@@ -745,7 +745,7 @@ public class UserControllerIntegrationTest {
 
 ---
 
-## Deployment Instructions
+## 6: Deployment Instructions
 
 ### Docker Compose Setup
 
@@ -831,7 +831,7 @@ spec:
 
 ---
 
-## Common Pitfalls & Solutions
+## 7: Common Pitfalls & Solutions
 
 ### Issue 1: JWT Token Expiry
 **Problem**: Tokens expire during long operations  

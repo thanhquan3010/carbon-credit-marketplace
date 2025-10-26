@@ -4,6 +4,7 @@ import com.carbonmarketplace.userservice.dto.request.LoginRequest;
 import com.carbonmarketplace.userservice.dto.request.RefreshTokenRequest;
 import com.carbonmarketplace.userservice.dto.request.RegisterRequest;
 import com.carbonmarketplace.userservice.dto.response.AuthResponse;
+import com.carbonmarketplace.userservice.dto.response.TokenExpirationResponse;
 import com.carbonmarketplace.userservice.dto.response.UserResponse;
 import com.carbonmarketplace.userservice.entity.RefreshToken;
 import com.carbonmarketplace.userservice.entity.User;
@@ -24,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.Date;
 import java.util.UUID;
 
 @Service
@@ -271,5 +273,35 @@ public class AuthService {
         refreshTokenRepository.revokeAllUserTokens(userId, LocalDateTime.now());
 
         log.info("Password changed successfully for user: {}", userId);
+    }
+
+    /**
+     * Check token expiration status
+     * Returns information about when the token expires and if it should be
+     * refreshed
+     */
+    public TokenExpirationResponse checkTokenExpiration(String token) {
+        try {
+            if (!tokenProvider.validateToken(token)) {
+                return TokenExpirationResponse.from(0, true, true, 0, 0);
+            }
+
+            long remainingSeconds = tokenProvider.getRemainingTimeInSeconds(token);
+            boolean expired = tokenProvider.isTokenExpired(token);
+            boolean shouldRefresh = tokenProvider.shouldRefreshToken(token);
+
+            Date expirationDate = tokenProvider.getExpirationDateFromToken(token);
+            Date now = new Date();
+
+            return TokenExpirationResponse.from(
+                    remainingSeconds,
+                    expired,
+                    shouldRefresh,
+                    now.getTime() / 1000,
+                    expirationDate.getTime() / 1000);
+        } catch (Exception e) {
+            log.error("Error checking token expiration", e);
+            return TokenExpirationResponse.from(0, true, true, 0, 0);
+        }
     }
 }
