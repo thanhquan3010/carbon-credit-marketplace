@@ -85,6 +85,9 @@ logging:
 
 # Payment Gateway Configuration
 payment:
+  # Base URL for webhooks (update with ngrok URL for local testing)
+  webhook-base-url: ${WEBHOOK_BASE_URL:http://localhost:8085}
+  
   platform:
     fee-percentage: ${PLATFORM_FEE_PERCENTAGE:5}
     
@@ -96,17 +99,20 @@ payment:
     access-key: ${MOMO_ACCESS_KEY:F8BBA842ECF85}
     secret-key: ${MOMO_SECRET_KEY:K951B6PE1waDMi640xX08PD3vg6EkVlz}
     environment: ${MOMO_ENVIRONMENT:test}
+    webhook-url: ${MOMO_WEBHOOK_URL:http://localhost:8085/api/v1/webhooks/momo}
     
   vnpay:
     tmn-code: ${VNPAY_TMN_CODE:CARBON01}
     hash-secret: ${VNPAY_HASH_SECRET:KBTHCZMFWCBAQNHUYVGQIXBSRQZAOVFK}
     environment: ${VNPAY_ENVIRONMENT:sandbox}
     refund-url: ${VNPAY_REFUND_URL:https://sandbox.vnpayment.vn/merchant_webapi/api/transaction}
+    ipn-url: ${VNPAY_IPN_URL:http://localhost:8085/api/v1/webhooks/vnpay}
     
   bank:
     account-name: ${BANK_ACCOUNT_NAME:Carbon Credit Marketplace}
     master-account: ${BANK_MASTER_ACCOUNT:1234567890}
     transfer-timeout-hours: ${BANK_TRANSFER_TIMEOUT_HOURS:48}
+    webhook-url: ${BANK_WEBHOOK_URL:http://localhost:8085/api/v1/webhooks/bank-transfer}
     
   stripe:
     secret-key: ${STRIPE_SECRET_KEY:sk_test_51234567890}

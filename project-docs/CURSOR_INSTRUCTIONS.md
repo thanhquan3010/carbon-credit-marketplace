@@ -857,18 +857,48 @@ spring:
 
 ### Issue 3: Elasticsearch Memory
 **Problem**: Out of memory errors  
-**Solution**: Set JVM heap size
+**Solution**: Set JVM heap size (already configured in docker-compose.yml)
 ```bash
 ES_JAVA_OPTS="-Xms2g -Xmx2g"
 ```
 
 ### Issue 4: Payment Webhook Failures
-**Problem**: Webhooks not received  
+**Problem**: Webhooks not received during local testing  
 **Solution**: Use ngrok for local testing
+
+#### Quick Setup:
 ```bash
-ngrok http 8080
-# Use ngrok URL for webhook callbacks
+# 1. Install ngrok and authenticate
+ngrok config add-authtoken YOUR_AUTH_TOKEN
+
+# 2. Start ngrok tunnel to payment service
+ngrok http 8087
+
+# 3. Update webhook URLs with ngrok URL
+export WEBHOOK_BASE_URL="https://your-ngrok-url.ngrok-free.app"
+export MOMO_WEBHOOK_URL="$WEBHOOK_BASE_URL/api/v1/webhooks/momo"
+export VNPAY_IPN_URL="$WEBHOOK_BASE_URL/api/v1/webhooks/vnpay"
+export BANK_WEBHOOK_URL="$WEBHOOK_BASE_URL/api/v1/webhooks/bank-transfer"
+
+# 4. Restart payment service
+docker-compose restart payment-service
+
+# 5. Monitor webhook traffic
+open http://localhost:4040
 ```
+
+#### Testing Webhooks:
+```bash
+# Test MoMo webhook
+curl -X POST $MOMO_WEBHOOK_URL \
+  -H "Content-Type: application/json" \
+  -d '{"orderId":"TEST-001","resultCode":0}'
+
+# Check logs
+docker logs carbon-marketplace-payment-service -f
+```
+
+**Note**: See WEBHOOK_NGROK_SETUP.md for detailed instructions
 
 ---
 
