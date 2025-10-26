@@ -1,5 +1,6 @@
 version: '3.8'
 
+#Data Layer (4 services)
 services:
   # PostgreSQL Database
   postgres:
@@ -80,6 +81,7 @@ services:
       timeout: 10s
       retries: 5
 
+  # Backend Microservices Layer (4 services)
   # Eureka Service Discovery
   eureka-server:
     build: ./backend/eureka-server
