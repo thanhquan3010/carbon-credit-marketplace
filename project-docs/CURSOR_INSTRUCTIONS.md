@@ -522,7 +522,7 @@ Implement atomic operations using database transactions.
 @Transactional
 public class TransactionSagaService {
     
-    public TransactionResult executePurchase(PurchaseRequest request) {
+    public TransactionResult executPurchase(PurchaseRequest request) {
         SagaTransaction saga = new SagaTransaction();
         
         try {
