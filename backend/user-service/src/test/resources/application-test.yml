@@ -1,0 +1,64 @@
+spring:
+  application:
+    name: user-service-test
+
+  datasource:
+    url: jdbc:h2:mem:testdb
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+
+  h2:
+    console:
+      enabled: true
+
+  mail:
+    host: localhost
+    port: 1025
+    username: test
+    password: test
+
+  security:
+    jwt:
+      secret: test-secret-key-for-jwt-token-generation-minimum-256-bits
+      expiration: 3600000 # 1 hour
+      refresh-expiration: 604800000 # 7 days
+
+  cloud:
+    aws:
+      s3:
+        bucket: test-bucket
+      credentials:
+        access-key: test-access-key
+        secret-key: test-secret-key
+      region:
+        static: us-east-1
+
+  redis:
+    host: localhost
+    port: 6379
+    password:
+
+logging:
+  level:
+    com.carbonmarketplace: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+# Disable Eureka for tests
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+
