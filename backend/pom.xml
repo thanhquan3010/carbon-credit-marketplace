@@ -22,20 +22,14 @@
 
     <modules>
         <module>common</module>
-        <module>eureka-server</module>
-        <module>config-server</module>
-        <module>api-gateway</module>
         <module>user-service</module>
         <module>vehicle-service</module>
-        <module>trip-service</module>
         <module>carbon-credit-service</module>
         <module>verification-service</module>
         <module>marketplace-service</module>
         <module>transaction-service</module>
         <module>payment-service</module>
-        <module>certificate-service</module>
         <module>notification-service</module>
-        <module>admin-service</module>
         <module>analytics-service</module>
     </modules>
 

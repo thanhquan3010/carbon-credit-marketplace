@@ -5,16 +5,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.1.5</version>
-        <relativePath/>
+        <groupId>com.carbonmarketplace</groupId>
+        <artifactId>carbon-credit-marketplace-backend</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>com.carbonmarketplace</groupId>
     <artifactId>analytics-service</artifactId>
-    <version>1.0.0</version>
-    <name>analytics-service</name>
+    <name>Analytics Service</name>
     <description>Analytics Service for Carbon Credit Marketplace</description>
 
     <properties>
@@ -22,7 +20,6 @@
         <spring-cloud.version>2022.0.4</spring-cloud.version>
         <mapstruct.version>1.5.5.Final</mapstruct.version>
         <lombok.version>1.18.30</lombok.version>
-        <timescale-jdbc.version>0.12.0</timescale-jdbc.version>
         <apache-poi.version>5.2.4</apache-poi.version>
     </properties>
 
@@ -77,11 +74,7 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
-        <dependency>
-            <groupId>com.timescale</groupId>
-            <artifactId>timescaledb-jdbc</artifactId>
-            <version>${timescale-jdbc.version}</version>
-        </dependency>
+        <!-- TimescaleDB is a PostgreSQL extension, standard PostgreSQL driver above works fine -->
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-core</artifactId>
@@ -110,6 +103,13 @@
             <artifactId>jjwt-jackson</artifactId>
             <version>0.11.5</version>
             <scope>runtime</scope>
+        </dependency>
+
+        <!-- OpenAPI Documentation -->
+        <dependency>
+            <groupId>org.springdoc</groupId>
+            <artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+            <version>2.2.0</version>
         </dependency>
 
         <!-- Apache POI for Excel export -->

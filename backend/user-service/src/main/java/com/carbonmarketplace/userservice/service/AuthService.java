@@ -24,6 +24,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.UUID;
@@ -232,7 +233,7 @@ public class AuthService {
                 .token(token)
                 .deviceInfo(deviceInfo)
                 .ipAddress(ipAddress)
-                .expiresAt(LocalDateTime.now().plusMillis(refreshTokenExpiration))
+                .expiresAt(LocalDateTime.now().plus(Duration.ofMillis(refreshTokenExpiration)))
                 .revoked(false)
                 .build();
 

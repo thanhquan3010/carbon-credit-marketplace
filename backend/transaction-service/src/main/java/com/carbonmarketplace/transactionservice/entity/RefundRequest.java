@@ -11,10 +11,10 @@ import java.util.UUID;
 
 @Entity
 @Table(name = "refund_requests", indexes = {
-    @Index(name = "idx_refund_transaction", columnList = "transaction_id"),
-    @Index(name = "idx_refund_status", columnList = "status"),
-    @Index(name = "idx_refund_requester", columnList = "requester_id"),
-    @Index(name = "idx_refund_created", columnList = "created_at DESC")
+        @Index(name = "idx_refund_transaction", columnList = "transaction_id"),
+        @Index(name = "idx_refund_status", columnList = "status"),
+        @Index(name = "idx_refund_requester", columnList = "requester_id"),
+        @Index(name = "idx_refund_created", columnList = "created_at DESC")
 })
 @Data
 @Builder
@@ -182,25 +182,25 @@ public class RefundRequest {
     private Long version;
 
     public enum RefundStatus {
-        PENDING,            // Initial request
-        AWAITING_APPROVAL,  // Waiting for manual approval
-        APPROVED,           // Approved for processing
-        REJECTED,           // Approval rejected
-        PROCESSING,         // Being processed
-        CREDITS_REVERSING,  // Reversing credit transfer
-        PAYMENT_REFUNDING,  // Refunding payment
-        COMPLETED,          // Successfully refunded
-        FAILED,            // Refund failed
-        CANCELLED,         // Request cancelled
-        EXPIRED            // Request expired
+        PENDING, // Initial request
+        AWAITING_APPROVAL, // Waiting for manual approval
+        APPROVED, // Approved for processing
+        REJECTED, // Approval rejected
+        PROCESSING, // Being processed
+        CREDITS_REVERSING, // Reversing credit transfer
+        PAYMENT_REFUNDING, // Refunding payment
+        COMPLETED, // Successfully refunded
+        FAILED, // Refund failed
+        CANCELLED, // Request cancelled
+        EXPIRED // Request expired
     }
 
     public enum RefundType {
-        FULL,              // Full refund
-        PARTIAL,           // Partial refund
+        FULL, // Full refund
+        PARTIAL, // Partial refund
         CREDIT_ADJUSTMENT, // Credit only adjustment
-        GOODWILL,         // Goodwill refund
-        DISPUTE           // Dispute resolution
+        GOODWILL, // Goodwill refund
+        DISPUTE // Dispute resolution
     }
 
     public enum RefundReasonCategory {
@@ -212,26 +212,27 @@ public class RefundRequest {
         FRAUD,
         CUSTOMER_REQUEST,
         ADMIN_OVERRIDE,
-        OTHER
+        OTHER,
+        DISPUTE
     }
 
     // Business Methods
     public void generateRefundNumber() {
-        this.refundNumber = "RFD-" + System.currentTimeMillis() + 
-                           "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
+        this.refundNumber = "RFD-" + System.currentTimeMillis() +
+                "-" + UUID.randomUUID().toString().substring(0, 8).toUpperCase();
     }
 
     public boolean requiresManualApproval(BigDecimal thresholdVnd) {
-        return refundAmountVnd.compareTo(thresholdVnd) > 0 || 
-               refundType == RefundType.DISPUTE ||
-               reasonCategory == RefundReasonCategory.FRAUD;
+        return refundAmountVnd.compareTo(thresholdVnd) > 0 ||
+                refundType == RefundType.DISPUTE ||
+                reasonCategory == RefundReasonCategory.FRAUD;
     }
 
     public boolean canAutoApprove(BigDecimal autoApproveThresholdVnd) {
         return refundAmountVnd.compareTo(autoApproveThresholdVnd) <= 0 &&
-               refundType == RefundType.FULL &&
-               reasonCategory != RefundReasonCategory.FRAUD &&
-               reasonCategory != RefundReasonCategory.DISPUTE;
+                refundType == RefundType.FULL &&
+                reasonCategory != RefundReasonCategory.FRAUD &&
+                reasonCategory != RefundReasonCategory.DISPUTE;
     }
 
     public boolean isExpired() {
@@ -239,22 +240,22 @@ public class RefundRequest {
     }
 
     public boolean canRetry() {
-        return status == RefundStatus.FAILED && 
-               retryCount < maxRetries &&
-               !isExpired();
+        return status == RefundStatus.FAILED &&
+                retryCount < maxRetries &&
+                !isExpired();
     }
 
     public void calculateFinancialImpact(BigDecimal platformFeePercentage) {
         if (refundType == RefundType.FULL) {
             this.platformFeeRefundVnd = originalAmountVnd.multiply(platformFeePercentage)
-                                                         .divide(new BigDecimal(100));
+                    .divide(new BigDecimal(100));
             this.sellerDebitVnd = refundAmountVnd.subtract(platformFeeRefundVnd);
             this.netRefundVnd = refundAmountVnd;
         } else if (refundType == RefundType.PARTIAL) {
             BigDecimal refundRatio = refundAmountVnd.divide(originalAmountVnd, 4, BigDecimal.ROUND_HALF_UP);
             this.platformFeeRefundVnd = originalAmountVnd.multiply(platformFeePercentage)
-                                                         .divide(new BigDecimal(100))
-                                                         .multiply(refundRatio);
+                    .divide(new BigDecimal(100))
+                    .multiply(refundRatio);
             this.sellerDebitVnd = refundAmountVnd.subtract(platformFeeRefundVnd);
             this.netRefundVnd = refundAmountVnd;
         }

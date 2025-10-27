@@ -169,13 +169,15 @@ public class VehicleController {
         log.info("Uploading CSV trips for vehicle: {}", vehicleId);
         
         if (file.isEmpty()) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("File is empty"));
+            @SuppressWarnings("unchecked")
+            ApiResponse<Map<String, Object>> errorResponse = (ApiResponse<Map<String, Object>>) (ApiResponse<?>) ApiResponse.error("File is empty");
+            return ResponseEntity.badRequest().body(errorResponse);
         }
         
         if (!file.getOriginalFilename().endsWith(".csv")) {
-            return ResponseEntity.badRequest()
-                    .body(ApiResponse.error("File must be a CSV"));
+            @SuppressWarnings("unchecked")
+            ApiResponse<Map<String, Object>> errorResponse = (ApiResponse<Map<String, Object>>) (ApiResponse<?>) ApiResponse.error("File must be a CSV");
+            return ResponseEntity.badRequest().body(errorResponse);
         }
         
         Map<String, Object> result = tripService.uploadTripsFromCsv(vehicleId, file, userId);

@@ -5,6 +5,7 @@ import com.opencsv.CSVReader;
 import com.opencsv.bean.CsvToBeanBuilder;
 import com.opencsv.bean.CsvBindByName;
 import com.opencsv.bean.CsvDate;
+import com.opencsv.exceptions.CsvValidationException;
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -35,7 +36,7 @@ public class CsvParser {
     /**
      * Parse trips from CSV input stream
      */
-    public List<TripUploadRequest> parseTripsCsv(InputStream inputStream) throws IOException {
+    public List<TripUploadRequest> parseTripsCsv(InputStream inputStream) throws IOException, CsvValidationException {
         log.info("Parsing trips CSV file");
         
         List<TripUploadRequest> trips = new ArrayList<>();

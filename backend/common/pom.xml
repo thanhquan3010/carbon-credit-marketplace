@@ -4,18 +4,19 @@
          http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
-    <groupId>com.carbonmarketplace</groupId>
+    <parent>
+        <groupId>com.carbonmarketplace</groupId>
+        <artifactId>carbon-credit-marketplace-backend</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
     <artifactId>common</artifactId>
-    <version>1.0.0</version>
     <packaging>jar</packaging>
-    <name>common</name>
+    <name>Common Module</name>
     <description>Common utilities and shared DTOs for Carbon Credit Marketplace</description>
 
     <properties>
-        <java.version>17</java.version>
-        <maven.compiler.source>17</maven.compiler.source>
-        <maven.compiler.target>17</maven.compiler.target>
-        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <lombok.version>1.18.30</lombok.version>
         <jackson.version>2.15.3</jackson.version>
         <spring.version>6.0.13</spring.version>

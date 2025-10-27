@@ -22,7 +22,6 @@ import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Service for managing auctions and bidding.
@@ -32,37 +31,37 @@ import java.util.concurrent.TimeUnit;
 @Slf4j
 @Transactional
 public class AuctionService {
-    
+
     private final ListingRepository listingRepository;
     private final BidRepository bidRepository;
     private final SimpMessagingTemplate messagingTemplate;
-    
+
     @Value("${marketplace.listing.auction.min-increment-vnd}")
     private BigDecimal minBidIncrement;
-    
+
     @Value("${marketplace.listing.auction.auto-extend-minutes}")
     private int autoExtendMinutes;
-    
+
     @Value("${marketplace.listing.auction.auto-extend-window-minutes}")
     private int autoExtendWindowMinutes;
-    
+
     /**
      * Place a bid on an auction listing.
      */
     public BidResponse placeBid(UUID bidderId, BidRequest request) {
         log.info("Processing bid from user {} for listing {}", bidderId, request.getListingId());
-        
+
         Listing listing = listingRepository.findById(request.getListingId())
                 .orElseThrow(() -> new ResourceNotFoundException("Listing not found"));
-        
+
         // Validate auction status
         if (!listing.isAuctionActive()) {
             throw new InvalidBidException("Auction is not active");
         }
-        
+
         // Validate bid amount
         validateBidAmount(listing, request.getBidAmountPerTon());
-        
+
         // Create and save bid
         Bid bid = Bid.builder()
                 .listing(listing)
@@ -73,53 +72,55 @@ public class AuctionService {
                 .status(Bid.BidStatus.ACTIVE)
                 .isAutoBid(false)
                 .build();
-        
+
         bid = bidRepository.save(bid);
-        
+
+        // Capture previous highest bidder BEFORE updating the listing
+        UUID previousHighestBidderId = listing.getHighestBidderId();
+
         // Update previous highest bidder status
-        if (listing.getHighestBidderId() != null && !listing.getHighestBidderId().equals(bidderId)) {
-            updatePreviousBidderStatus(listing.getId(), listing.getHighestBidderId());
+        if (previousHighestBidderId != null && !previousHighestBidderId.equals(bidderId)) {
+            updatePreviousBidderStatus(listing.getId(), previousHighestBidderId);
         }
-        
+
         // Update listing with new highest bid
         listing.setCurrentBidPriceVnd(request.getBidAmountPerTon());
         listing.setHighestBidderId(bidderId);
         listing.setBidCount(listing.getBidCount() + 1);
-        
+
         // Check for auto-extension
         if (shouldExtendAuction(listing)) {
             extendAuction(listing);
         }
-        
+
         listingRepository.save(listing);
-        
-        // Broadcast bid update to all watchers
-        broadcastBidUpdate(listing, bid);
-        
+
+        // Broadcast bid update to all watchers (pass previous bidder ID)
+        broadcastBidUpdate(listing, bid, previousHighestBidderId);
+
         // Process auto-bids from other users
         processAutoBids(listing, bidderId);
-        
+
         log.info("Bid placed successfully: {}", bid.getId());
         return BidResponse.fromEntity(bid);
     }
-    
+
     /**
      * Validate bid amount meets requirements.
      */
     private void validateBidAmount(Listing listing, BigDecimal bidAmount) {
         BigDecimal currentPrice = listing.getCurrentBidPriceVnd();
-        BigDecimal minBid = currentPrice != null 
-            ? currentPrice.add(minBidIncrement)
-            : listing.getStartingPricePerTonVnd();
-        
+        BigDecimal minBid = currentPrice != null
+                ? currentPrice.add(minBidIncrement)
+                : listing.getStartingPricePerTonVnd();
+
         if (bidAmount.compareTo(minBid) < 0) {
             throw new InvalidBidException(
-                String.format("Bid must be at least %s VND (current: %s + increment: %s)",
-                    minBid, currentPrice, minBidIncrement)
-            );
+                    String.format("Bid must be at least %s VND (current: %s + increment: %s)",
+                            minBid, currentPrice, minBidIncrement));
         }
     }
-    
+
     /**
      * Check if auction should be extended.
      */
@@ -127,14 +128,14 @@ public class AuctionService {
         if (listing.getAuctionExtendedCount() != null && listing.getAuctionExtendedCount() >= 3) {
             return false; // Maximum 3 extensions
         }
-        
+
         LocalDateTime now = LocalDateTime.now();
         LocalDateTime auctionEnd = listing.getAuctionEndTime();
         long minutesUntilEnd = ChronoUnit.MINUTES.between(now, auctionEnd);
-        
+
         return minutesUntilEnd <= autoExtendWindowMinutes;
     }
-    
+
     /**
      * Extend auction end time.
      */
@@ -142,10 +143,10 @@ public class AuctionService {
         LocalDateTime newEndTime = listing.getAuctionEndTime().plusMinutes(autoExtendMinutes);
         listing.setAuctionEndTime(newEndTime);
         listing.setAuctionExtendedCount(listing.getAuctionExtendedCount() + 1);
-        
-        log.info("Auction {} extended by {} minutes. New end time: {}", 
-            listing.getId(), autoExtendMinutes, newEndTime);
-        
+
+        log.info("Auction {} extended by {} minutes. New end time: {}",
+                listing.getId(), autoExtendMinutes, newEndTime);
+
         // Notify all watchers about extension
         BidUpdate extensionUpdate = BidUpdate.builder()
                 .listingId(listing.getId())
@@ -154,14 +155,14 @@ public class AuctionService {
                 .timeRemainingSeconds(ChronoUnit.SECONDS.between(LocalDateTime.now(), newEndTime))
                 .timestamp(LocalDateTime.now())
                 .build();
-        
+
         messagingTemplate.convertAndSend("/topic/auction/" + listing.getId(), extensionUpdate);
     }
-    
+
     /**
      * Broadcast bid update to WebSocket subscribers.
      */
-    private void broadcastBidUpdate(Listing listing, Bid bid) {
+    private void broadcastBidUpdate(Listing listing, Bid bid, UUID previousHighestBidderId) {
         BidUpdate update = BidUpdate.builder()
                 .listingId(listing.getId())
                 .bidderId(bid.getBidderId())
@@ -173,11 +174,11 @@ public class AuctionService {
                 .updateType("NEW_BID")
                 .timeRemainingSeconds(ChronoUnit.SECONDS.between(LocalDateTime.now(), listing.getAuctionEndTime()))
                 .build();
-        
+
         messagingTemplate.convertAndSend("/topic/auction/" + listing.getId(), update);
-        
+
         // Send personal notification to previous highest bidder
-        if (listing.getHighestBidderId() != null && !listing.getHighestBidderId().equals(bid.getBidderId())) {
+        if (previousHighestBidderId != null && !previousHighestBidderId.equals(bid.getBidderId())) {
             BidUpdate outbidNotification = BidUpdate.builder()
                     .listingId(listing.getId())
                     .updateType("OUTBID")
@@ -185,15 +186,14 @@ public class AuctionService {
                     .isWinning(false)
                     .timestamp(LocalDateTime.now())
                     .build();
-            
+
             messagingTemplate.convertAndSendToUser(
-                listing.getHighestBidderId().toString(),
-                "/queue/notifications",
-                outbidNotification
-            );
+                    previousHighestBidderId.toString(),
+                    "/queue/notifications",
+                    outbidNotification);
         }
     }
-    
+
     /**
      * Update status of previous highest bidder.
      */
@@ -206,21 +206,21 @@ public class AuctionService {
                     bidRepository.save(b);
                 });
     }
-    
+
     /**
      * Process auto-bids from other users.
      */
     private void processAutoBids(Listing listing, UUID currentBidderId) {
         List<Bid> activeBids = bidRepository.findActiveBidsByListing(listing.getId());
-        
+
         for (Bid bid : activeBids) {
             if (bid.getBidderId().equals(currentBidderId)) {
                 continue;
             }
-            
-            if (bid.getMaxAutoBidAmount() != null && 
-                bid.getMaxAutoBidAmount().compareTo(listing.getCurrentBidPriceVnd()) > 0) {
-                
+
+            if (bid.getMaxAutoBidAmount() != null &&
+                    bid.getMaxAutoBidAmount().compareTo(listing.getCurrentBidPriceVnd()) > 0) {
+
                 BigDecimal autoBidAmount = listing.getCurrentBidPriceVnd().add(minBidIncrement);
                 if (autoBidAmount.compareTo(bid.getMaxAutoBidAmount()) <= 0) {
                     // Place auto-bid
@@ -229,20 +229,20 @@ public class AuctionService {
                             .bidAmountPerTon(autoBidAmount)
                             .bidderName(bid.getBidderName())
                             .build();
-                    
+
                     try {
                         placeBid(bid.getBidderId(), autoBidRequest);
                         log.info("Auto-bid placed for user {}", bid.getBidderId());
                     } catch (Exception e) {
                         log.error("Failed to place auto-bid for user {}", bid.getBidderId(), e);
                     }
-                    
+
                     break; // Only process one auto-bid at a time
                 }
             }
         }
     }
-    
+
     /**
      * Get bid history for a listing.
      */
@@ -252,7 +252,7 @@ public class AuctionService {
                 .map(BidResponse::fromEntity)
                 .toList();
     }
-    
+
     /**
      * Get user's bid history.
      */
@@ -261,7 +261,7 @@ public class AuctionService {
                 .map(BidResponse::fromEntity)
                 .toList();
     }
-    
+
     /**
      * Scheduled task to close expired auctions.
      */
@@ -269,25 +269,25 @@ public class AuctionService {
     public void closeExpiredAuctions() {
         LocalDateTime now = LocalDateTime.now();
         List<Listing> expiredAuctions = listingRepository.findExpiredAuctions(now);
-        
+
         for (Listing listing : expiredAuctions) {
             closeAuction(listing);
         }
     }
-    
+
     /**
      * Close an auction and determine the winner.
      */
     private void closeAuction(Listing listing) {
         log.info("Closing auction {}", listing.getId());
-        
+
         // Check if reserve price was met
         if (!listing.hasReservePriceMet()) {
             listing.setStatus(Listing.ListingStatus.EXPIRED);
             log.info("Auction {} closed without meeting reserve price", listing.getId());
         } else if (listing.getHighestBidderId() != null) {
             listing.setStatus(Listing.ListingStatus.PENDING_PAYMENT);
-            
+
             // Mark winning bid
             bidRepository.findByBidderAndListing(listing.getHighestBidderId(), listing.getId())
                     .stream()
@@ -296,7 +296,7 @@ public class AuctionService {
                         b.setStatus(Bid.BidStatus.WON);
                         bidRepository.save(b);
                     });
-            
+
             // Notify winner
             BidUpdate winnerNotification = BidUpdate.builder()
                     .listingId(listing.getId())
@@ -305,19 +305,18 @@ public class AuctionService {
                     .isWinning(true)
                     .timestamp(LocalDateTime.now())
                     .build();
-            
+
             messagingTemplate.convertAndSendToUser(
-                listing.getHighestBidderId().toString(),
-                "/queue/notifications",
-                winnerNotification
-            );
-            
+                    listing.getHighestBidderId().toString(),
+                    "/queue/notifications",
+                    winnerNotification);
+
             log.info("Auction {} won by user {}", listing.getId(), listing.getHighestBidderId());
         } else {
             listing.setStatus(Listing.ListingStatus.EXPIRED);
             log.info("Auction {} expired with no bids", listing.getId());
         }
-        
+
         listingRepository.save(listing);
     }
 }

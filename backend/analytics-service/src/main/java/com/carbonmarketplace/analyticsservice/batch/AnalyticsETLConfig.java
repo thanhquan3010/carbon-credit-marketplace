@@ -13,6 +13,7 @@ import org.springframework.batch.core.launch.JobLauncher;
 import org.springframework.batch.core.launch.support.RunIdIncrementer;
 import org.springframework.batch.core.repository.JobRepository;
 import org.springframework.batch.core.step.builder.StepBuilder;
+import org.springframework.batch.repeat.RepeatStatus;
 import org.springframework.batch.item.ItemProcessor;
 import org.springframework.batch.item.ItemReader;
 import org.springframework.batch.item.ItemWriter;
@@ -141,11 +142,11 @@ public class AnalyticsETLConfig {
             metric.setStatus(transaction.getStatus());
             metric.setProcessedAt(LocalDateTime.now());
             metric.setTimestamp(transaction.getCreatedAt());
-            
+
             // Calculate additional metrics
             metric.setCo2Offset(calculateCO2Offset(transaction));
             metric.setRevenueGenerated(calculateRevenue(transaction));
-            
+
             return metric;
         };
     }
@@ -155,9 +156,9 @@ public class AnalyticsETLConfig {
         return new JdbcBatchItemWriterBuilder<TransactionMetric>()
                 .dataSource(dataSource)
                 .sql("INSERT INTO transaction_metrics (transaction_id, user_id, amount, credit_amount, " +
-                     "transaction_type, status, processed_at, timestamp, co2_offset, revenue_generated) " +
-                     "VALUES (:transactionId, :userId, :amount, :creditAmount, :transactionType, :status, " +
-                     ":processedAt, :timestamp, :co2Offset, :revenueGenerated)")
+                        "transaction_type, status, processed_at, timestamp, co2_offset, revenue_generated) " +
+                        "VALUES (:transactionId, :userId, :amount, :creditAmount, :transactionType, :status, " +
+                        ":processedAt, :timestamp, :co2Offset, :revenueGenerated)")
                 .beanMapped()
                 .build();
     }
@@ -172,15 +173,15 @@ public class AnalyticsETLConfig {
 
             @Override
             public void afterJob(JobExecution jobExecution) {
-                log.info("Analytics ETL Job completed with status: {} at: {}", 
+                log.info("Analytics ETL Job completed with status: {} at: {}",
                         jobExecution.getStatus(), jobExecution.getEndTime());
                 if (jobExecution.getStatus() == BatchStatus.COMPLETED) {
-                    log.info("Job completed successfully. Processed records: {}", 
+                    log.info("Job completed successfully. Processed records: {}",
                             jobExecution.getStepExecutions().stream()
                                     .mapToLong(StepExecution::getWriteCount)
                                     .sum());
                 } else if (jobExecution.getStatus() == BatchStatus.FAILED) {
-                    log.error("Job failed with exceptions: {}", 
+                    log.error("Job failed with exceptions: {}",
                             jobExecution.getAllFailureExceptions());
                 }
             }
@@ -197,7 +198,7 @@ public class AnalyticsETLConfig {
 
             @Override
             public ExitStatus afterStep(StepExecution stepExecution) {
-                log.info("Step {} completed. Read: {}, Written: {}, Skipped: {}", 
+                log.info("Step {} completed. Read: {}, Written: {}, Skipped: {}",
                         stepExecution.getStepName(),
                         stepExecution.getReadCount(),
                         stepExecution.getWriteCount(),
@@ -215,9 +216,9 @@ public class AnalyticsETLConfig {
                     .addDate("startTime", new Date())
                     .addString("jobType", "scheduled")
                     .toJobParameters();
-            
+
             JobExecution jobExecution = jobLauncher.run(analyticsJob(), jobParameters);
-            log.info("Job execution ID: {}, Status: {}", 
+            log.info("Job execution ID: {}, Status: {}",
                     jobExecution.getId(), jobExecution.getStatus());
         } catch (Exception e) {
             log.error("Failed to run analytics ETL job", e);

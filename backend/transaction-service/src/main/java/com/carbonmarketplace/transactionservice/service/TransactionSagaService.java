@@ -1,6 +1,7 @@
 package com.carbonmarketplace.transactionservice.service;
 
 import com.carbonmarketplace.transactionservice.dto.*;
+import com.carbonmarketplace.transactionservice.dto.TransactionDTOs.*;
 import com.carbonmarketplace.transactionservice.entity.*;
 import com.carbonmarketplace.transactionservice.exception.SagaExecutionException;
 import com.carbonmarketplace.transactionservice.repository.*;
@@ -19,12 +20,14 @@ import org.springframework.transaction.annotation.Transactional;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 
 /**
  * Transaction Saga Service
  * 
- * Implements the Saga pattern for distributed transaction management across microservices.
+ * Implements the Saga pattern for distributed transaction management across
+ * microservices.
  * Handles transaction orchestration, compensation, and failure recovery.
  */
 @Service
@@ -38,19 +41,19 @@ public class TransactionSagaService {
     private final SagaStepRepository sagaStepRepository;
     private final EscrowService escrowService;
     private final SagaOrchestrator sagaOrchestrator;
-    
+
     // Feign clients for external services
     private final PaymentServiceClient paymentServiceClient;
     private final CarbonCreditServiceClient carbonCreditServiceClient;
     private final CertificateServiceClient certificateServiceClient;
     private final NotificationServiceClient notificationServiceClient;
-    
+
     @Value("${transaction.fees.platform-percentage:5.0}")
     private BigDecimal platformFeePercentage;
-    
+
     @Value("${transaction.saga.timeout-seconds:300}")
     private Integer sagaTimeoutSeconds;
-    
+
     @Value("${transaction.saga.max-retry-attempts:3}")
     private Integer maxRetryAttempts;
 
@@ -59,154 +62,165 @@ public class TransactionSagaService {
      */
     public TransactionResult executePurchase(PurchaseRequest request) {
         log.info("Starting purchase transaction for listing: {}", request.getListingId());
-        
+
         // Create saga transaction
         String sagaId = UUID.randomUUID().toString();
         SagaTransaction saga = new SagaTransaction(sagaId, sagaTimeoutSeconds);
-        
-        Transaction transaction = null;
-        
+
+        final Transaction[] transactionHolder = { null };
+        final CreditLockResult[] creditLockHolder = { null };
+        final EscrowAccount[] escrowHolder = { null };
+        final PaymentResult[] paymentHolder = { null };
+        final CreditTransferResult[] transferHolder = { null };
+        final CertificateResult[] certificateHolder = { null };
+        final SettlementScheduleResult[] settlementHolder = { null };
+
         try {
             // Step 1: Create transaction record
-            transaction = saga.execute(
-                "CREATE_TRANSACTION",
-                () -> createTransaction(request),
-                () -> deleteTransaction(request.getIdempotencyKey())
-            );
-            
-            recordSagaStep(transaction, sagaId, "CREATE_TRANSACTION", 1, 
-                          SagaStep.StepStatus.COMPLETED);
-            
+            transactionHolder[0] = saga.execute(
+                    "CREATE_TRANSACTION",
+                    () -> createTransaction(request),
+                    () -> deleteTransaction(request.getIdempotencyKey()));
+
+            recordSagaStep(transactionHolder[0], sagaId, "CREATE_TRANSACTION", 1,
+                    SagaStep.StepStatus.COMPLETED);
+
             // Step 2: Validate and lock credits
-            CreditLockResult creditLock = saga.execute(
-                "LOCK_CREDITS",
-                () -> lockCreditsInInventory(transaction),
-                () -> unlockCreditsInInventory(creditLock.getLockId())
-            );
-            
-            recordSagaStep(transaction, sagaId, "LOCK_CREDITS", 2, 
-                          SagaStep.StepStatus.COMPLETED);
-            
+            creditLockHolder[0] = saga.execute(
+                    "LOCK_CREDITS",
+                    () -> lockCreditsInInventory(transactionHolder[0]),
+                    () -> {
+                    }); // Compensation handled in compensateTransaction()
+
+            recordSagaStep(transactionHolder[0], sagaId, "LOCK_CREDITS", 2,
+                    SagaStep.StepStatus.COMPLETED);
+
             // Step 3: Create escrow account
-            EscrowAccount escrow = saga.execute(
-                "CREATE_ESCROW",
-                () -> createEscrowAccount(transaction, creditLock.getLockId()),
-                () -> deleteEscrowAccount(escrow.getEscrowAccountId())
-            );
-            
-            transaction.setEscrowAccount(escrow);
-            recordSagaStep(transaction, sagaId, "CREATE_ESCROW", 3, 
-                          SagaStep.StepStatus.COMPLETED);
-            
+            escrowHolder[0] = saga.execute(
+                    "CREATE_ESCROW",
+                    () -> createEscrowAccount(transactionHolder[0], creditLockHolder[0].getLockId()),
+                    () -> {
+                    }); // Compensation handled in compensateTransaction()
+
+            transactionHolder[0].setEscrowAccount(escrowHolder[0]);
+            recordSagaStep(transactionHolder[0], sagaId, "CREATE_ESCROW", 3,
+                    SagaStep.StepStatus.COMPLETED);
+
             // Step 4: Process payment
-            PaymentResult payment = saga.execute(
-                "PROCESS_PAYMENT",
-                () -> processPayment(transaction),
-                () -> refundPayment(payment.getPaymentId())
-            );
-            
-            transaction.setPaymentId(payment.getPaymentId());
-            transaction.setPaymentStatus(Transaction.PaymentStatus.PROCESSING);
-            transaction.setPaymentInitiatedAt(LocalDateTime.now());
-            transactionRepository.save(transaction);
-            
-            recordSagaStep(transaction, sagaId, "PROCESS_PAYMENT", 4, 
-                          SagaStep.StepStatus.COMPLETED);
-            
+            paymentHolder[0] = saga.execute(
+                    "PROCESS_PAYMENT",
+                    () -> processPayment(transactionHolder[0]),
+                    () -> {
+                    }); // Compensation handled in compensateTransaction()
+
+            transactionHolder[0].setPaymentId(paymentHolder[0].getPaymentId());
+            transactionHolder[0].setPaymentStatus(Transaction.PaymentStatus.PROCESSING);
+            transactionHolder[0].setPaymentInitiatedAt(LocalDateTime.now());
+            transactionRepository.save(transactionHolder[0]);
+
+            recordSagaStep(transactionHolder[0], sagaId, "PROCESS_PAYMENT", 4,
+                    SagaStep.StepStatus.COMPLETED);
+
             // Step 5: Wait for payment confirmation (async)
-            boolean paymentConfirmed = waitForPaymentConfirmation(payment.getPaymentId());
-            
+            boolean paymentConfirmed = waitForPaymentConfirmation(paymentHolder[0].getPaymentId());
+
             if (!paymentConfirmed) {
                 throw new SagaExecutionException("Payment confirmation timeout");
             }
-            
-            transaction.setPaymentStatus(Transaction.PaymentStatus.COMPLETED);
-            transaction.setPaymentCompletedAt(LocalDateTime.now());
-            
+
+            transactionHolder[0].setPaymentStatus(Transaction.PaymentStatus.COMPLETED);
+            transactionHolder[0].setPaymentCompletedAt(LocalDateTime.now());
+
             // Step 6: Hold funds in escrow
             saga.execute(
-                "HOLD_IN_ESCROW",
-                () -> holdFundsInEscrow(escrow, payment),
-                () -> releaseEscrowHold(escrow.getEscrowAccountId())
-            );
-            
-            recordSagaStep(transaction, sagaId, "HOLD_IN_ESCROW", 5, 
-                          SagaStep.StepStatus.COMPLETED);
-            
+                    "HOLD_IN_ESCROW",
+                    () -> {
+                        holdFundsInEscrow(escrowHolder[0], paymentHolder[0]);
+                        return null;
+                    },
+                    () -> {
+                    }); // Compensation handled in compensateTransaction()
+
+            recordSagaStep(transactionHolder[0], sagaId, "HOLD_IN_ESCROW", 5,
+                    SagaStep.StepStatus.COMPLETED);
+
             // Step 7: Transfer credits to buyer
-            CreditTransferResult transfer = saga.execute(
-                "TRANSFER_CREDITS",
-                () -> transferCreditsToBuyer(transaction, creditLock),
-                () -> reverseCreditTransfer(transfer.getTransferId())
-            );
-            
-            transaction.setCreditsTransferredAt(LocalDateTime.now());
-            recordSagaStep(transaction, sagaId, "TRANSFER_CREDITS", 6, 
-                          SagaStep.StepStatus.COMPLETED);
-            
+            transferHolder[0] = saga.execute(
+                    "TRANSFER_CREDITS",
+                    () -> transferCreditsToBuyer(transactionHolder[0], creditLockHolder[0]),
+                    () -> {
+                    }); // Compensation handled in compensateTransaction()
+
+            transactionHolder[0].setCreditsTransferredAt(LocalDateTime.now());
+            recordSagaStep(transactionHolder[0], sagaId, "TRANSFER_CREDITS", 6,
+                    SagaStep.StepStatus.COMPLETED);
+
             // Step 8: Generate certificate
-            CertificateResult certificate = saga.execute(
-                "GENERATE_CERTIFICATE",
-                () -> generateCertificate(transaction, transfer),
-                () -> voidCertificate(certificate.getCertificateId())
-            );
-            
-            transaction.setCertificateId(certificate.getCertificateId());
-            transaction.setCertificateIssuedAt(LocalDateTime.now());
-            recordSagaStep(transaction, sagaId, "GENERATE_CERTIFICATE", 7, 
-                          SagaStep.StepStatus.COMPLETED);
-            
+            certificateHolder[0] = saga.execute(
+                    "GENERATE_CERTIFICATE",
+                    () -> generateCertificate(transactionHolder[0], transferHolder[0]),
+                    () -> {
+                    }); // Compensation handled in compensateTransaction()
+
+            transactionHolder[0].setCertificateId(certificateHolder[0].getCertificateId());
+            transactionHolder[0].setCertificateIssuedAt(LocalDateTime.now());
+            recordSagaStep(transactionHolder[0], sagaId, "GENERATE_CERTIFICATE", 7,
+                    SagaStep.StepStatus.COMPLETED);
+
             // Step 9: Schedule settlement (T+2)
-            SettlementScheduleResult settlement = saga.execute(
-                "SCHEDULE_SETTLEMENT",
-                () -> scheduleSettlement(transaction, escrow),
-                () -> cancelSettlement(settlement.getSettlementId())
-            );
-            
-            transaction.setSettlementDate(settlement.getScheduledDate());
-            transaction.setStatus(Transaction.TransactionStatus.IN_SETTLEMENT);
-            recordSagaStep(transaction, sagaId, "SCHEDULE_SETTLEMENT", 8, 
-                          SagaStep.StepStatus.COMPLETED);
-            
+            settlementHolder[0] = saga.execute(
+                    "SCHEDULE_SETTLEMENT",
+                    () -> scheduleSettlement(transactionHolder[0], escrowHolder[0]),
+                    () -> {
+                    }); // Compensation handled in compensateTransaction()
+
+            transactionHolder[0].setSettlementDate(settlementHolder[0].getScheduledDate());
+            transactionHolder[0].setStatus(Transaction.TransactionStatus.IN_SETTLEMENT);
+            recordSagaStep(transactionHolder[0], sagaId, "SCHEDULE_SETTLEMENT", 8,
+                    SagaStep.StepStatus.COMPLETED);
+
             // Step 10: Send notifications (no compensation needed)
             saga.execute(
-                "SEND_NOTIFICATIONS",
-                () -> sendTransactionNotifications(transaction, certificate),
-                () -> { /* No compensation for notifications */ }
-            );
-            
-            recordSagaStep(transaction, sagaId, "SEND_NOTIFICATIONS", 9, 
-                          SagaStep.StepStatus.COMPLETED);
-            
+                    "SEND_NOTIFICATIONS",
+                    () -> {
+                        sendTransactionNotifications(transactionHolder[0], certificateHolder[0]);
+                        return null;
+                    },
+                    () -> {
+                    }); // No compensation for notifications
+
+            recordSagaStep(transactionHolder[0], sagaId, "SEND_NOTIFICATIONS", 9,
+                    SagaStep.StepStatus.COMPLETED);
+
             // Commit saga
             saga.commit();
-            
+
             // Update final transaction status
-            transaction.setStatus(Transaction.TransactionStatus.COMPLETED);
-            transaction.setCompletedAt(LocalDateTime.now());
-            transaction = transactionRepository.save(transaction);
-            
-            log.info("Purchase transaction completed successfully: {}", 
-                    transaction.getTransactionId());
-            
-            return TransactionResult.success(transaction);
-            
+            transactionHolder[0].setStatus(Transaction.TransactionStatus.COMPLETED);
+            transactionHolder[0].setCompletedAt(LocalDateTime.now());
+            transactionHolder[0] = transactionRepository.save(transactionHolder[0]);
+
+            log.info("Purchase transaction completed successfully: {}",
+                    transactionHolder[0].getTransactionId());
+
+            return TransactionResult.success(transactionHolder[0]);
+
         } catch (Exception e) {
             log.error("Purchase transaction failed: {}", e.getMessage(), e);
-            
+
             // Rollback saga
             saga.rollback();
-            
-            if (transaction != null) {
-                transaction.setStatus(Transaction.TransactionStatus.FAILED);
-                transaction.setFailureReason(e.getMessage());
-                transaction.setFailedAt(LocalDateTime.now());
-                transactionRepository.save(transaction);
-                
+
+            if (transactionHolder[0] != null) {
+                transactionHolder[0].setStatus(Transaction.TransactionStatus.FAILED);
+                transactionHolder[0].setFailureReason(e.getMessage());
+                transactionHolder[0].setFailedAt(LocalDateTime.now());
+                transactionRepository.save(transactionHolder[0]);
+
                 // Record failed saga steps
-                recordSagaFailure(transaction, sagaId, e.getMessage());
+                recordSagaFailure(transactionHolder[0], sagaId, e.getMessage());
             }
-            
+
             return TransactionResult.failure(e.getMessage());
         }
     }
@@ -216,23 +230,23 @@ public class TransactionSagaService {
      */
     private Transaction createTransaction(PurchaseRequest request) {
         log.debug("Creating transaction for listing: {}", request.getListingId());
-        
+
         // Check for duplicate using idempotency key
         if (request.getIdempotencyKey() != null) {
             transactionRepository.findByIdempotencyKey(request.getIdempotencyKey())
-                .ifPresent(existing -> {
-                    throw new IllegalStateException("Duplicate transaction: " + 
-                                                  existing.getTransactionId());
-                });
+                    .ifPresent(existing -> {
+                        throw new IllegalStateException("Duplicate transaction: " +
+                                existing.getTransactionId());
+                    });
         }
-        
+
         // Calculate fees
         BigDecimal totalAmount = request.getUnitPrice()
-                                       .multiply(request.getCreditAmount());
+                .multiply(request.getCreditAmount());
         BigDecimal platformFee = totalAmount.multiply(platformFeePercentage)
-                                           .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
+                .divide(BigDecimal.valueOf(100), 2, RoundingMode.HALF_UP);
         BigDecimal sellerReceives = totalAmount.subtract(platformFee);
-        
+
         Transaction transaction = Transaction.builder()
                 .listingId(request.getListingId())
                 .buyerId(request.getBuyerId())
@@ -255,7 +269,7 @@ public class TransactionSagaService {
                 .isExpressSettlement(request.getIsExpressSettlement())
                 .notes(request.getNotes())
                 .build();
-        
+
         return transactionRepository.save(transaction);
     }
 
@@ -264,29 +278,28 @@ public class TransactionSagaService {
      */
     private void deleteTransaction(String idempotencyKey) {
         log.debug("Deleting transaction with idempotency key: {}", idempotencyKey);
-        
+
         transactionRepository.findByIdempotencyKey(idempotencyKey)
-            .ifPresent(transaction -> {
-                transaction.setStatus(Transaction.TransactionStatus.CANCELLED);
-                transaction.setCancelledAt(LocalDateTime.now());
-                transactionRepository.save(transaction);
-            });
+                .ifPresent(transaction -> {
+                    transaction.setStatus(Transaction.TransactionStatus.CANCELLED);
+                    transaction.setCancelledAt(LocalDateTime.now());
+                    transactionRepository.save(transaction);
+                });
     }
 
     /**
      * Lock credits in inventory
      */
     private CreditLockResult lockCreditsInInventory(Transaction transaction) {
-        log.debug("Locking {} tons of credits for transaction: {}", 
-                 transaction.getCreditAmountTons(), transaction.getTransactionId());
-        
+        log.debug("Locking {} tons of credits for transaction: {}",
+                transaction.getCreditAmountTons(), transaction.getTransactionId());
+
         return carbonCreditServiceClient.lockCredits(
-            LockCreditsRequest.builder()
-                .listingId(transaction.getListingId())
-                .amount(transaction.getCreditAmountTons())
-                .transactionId(transaction.getTransactionId())
-                .build()
-        );
+                LockCreditsRequest.builder()
+                        .listingId(transaction.getListingId())
+                        .amount(transaction.getCreditAmountTons())
+                        .transactionId(transaction.getTransactionId())
+                        .build());
     }
 
     /**
@@ -294,7 +307,7 @@ public class TransactionSagaService {
      */
     private void unlockCreditsInInventory(String lockId) {
         log.debug("Unlocking credits with lock ID: {}", lockId);
-        
+
         carbonCreditServiceClient.unlockCredits(lockId);
     }
 
@@ -317,16 +330,15 @@ public class TransactionSagaService {
      */
     private PaymentResult processPayment(Transaction transaction) {
         log.debug("Processing payment for transaction: {}", transaction.getTransactionId());
-        
+
         return paymentServiceClient.processPayment(
-            ProcessPaymentRequest.builder()
-                .transactionId(transaction.getTransactionId())
-                .amount(transaction.getTotalAmountVnd())
-                .currency("VND")
-                .buyerId(transaction.getBuyerId())
-                .description("Carbon Credit Purchase - " + transaction.getCreditAmountTons() + " tons")
-                .build()
-        );
+                ProcessPaymentRequest.builder()
+                        .transactionId(transaction.getTransactionId())
+                        .amount(transaction.getTotalAmountVnd())
+                        .currency("VND")
+                        .buyerId(transaction.getBuyerId())
+                        .description("Carbon Credit Purchase - " + transaction.getCreditAmountTons() + " tons")
+                        .build());
     }
 
     /**
@@ -334,7 +346,7 @@ public class TransactionSagaService {
      */
     private void refundPayment(UUID paymentId) {
         log.debug("Refunding payment: {}", paymentId);
-        
+
         paymentServiceClient.refundPayment(paymentId);
     }
 
@@ -364,19 +376,18 @@ public class TransactionSagaService {
     /**
      * Transfer credits to buyer
      */
-    private CreditTransferResult transferCreditsToBuyer(Transaction transaction, 
-                                                        CreditLockResult creditLock) {
+    private CreditTransferResult transferCreditsToBuyer(Transaction transaction,
+            CreditLockResult creditLock) {
         log.debug("Transferring credits to buyer: {}", transaction.getBuyerId());
-        
+
         return carbonCreditServiceClient.transferCredits(
-            TransferCreditsRequest.builder()
-                .fromUserId(transaction.getSellerId())
-                .toUserId(transaction.getBuyerId())
-                .amount(transaction.getCreditAmountTons())
-                .lockId(creditLock.getLockId())
-                .transactionId(transaction.getTransactionId())
-                .build()
-        );
+                TransferCreditsRequest.builder()
+                        .fromUserId(transaction.getSellerId())
+                        .toUserId(transaction.getBuyerId())
+                        .amount(transaction.getCreditAmountTons())
+                        .lockId(creditLock.getLockId())
+                        .transactionId(transaction.getTransactionId())
+                        .build());
     }
 
     /**
@@ -384,25 +395,24 @@ public class TransactionSagaService {
      */
     private void reverseCreditTransfer(UUID transferId) {
         log.debug("Reversing credit transfer: {}", transferId);
-        
+
         carbonCreditServiceClient.reverseTransfer(transferId);
     }
 
     /**
      * Generate certificate
      */
-    private CertificateResult generateCertificate(Transaction transaction, 
-                                                  CreditTransferResult transfer) {
+    private CertificateResult generateCertificate(Transaction transaction,
+            CreditTransferResult transfer) {
         log.debug("Generating certificate for transaction: {}", transaction.getTransactionId());
-        
+
         return certificateServiceClient.generateCertificate(
-            GenerateCertificateRequest.builder()
-                .transactionId(transaction.getTransactionId())
-                .buyerId(transaction.getBuyerId())
-                .creditAmount(transaction.getCreditAmountTons())
-                .transferId(transfer.getTransferId())
-                .build()
-        );
+                GenerateCertificateRequest.builder()
+                        .transactionId(transaction.getTransactionId())
+                        .buyerId(transaction.getBuyerId())
+                        .creditAmount(transaction.getCreditAmountTons())
+                        .transferId(transfer.getTransferId())
+                        .build());
     }
 
     /**
@@ -410,15 +420,15 @@ public class TransactionSagaService {
      */
     private void voidCertificate(UUID certificateId) {
         log.debug("Voiding certificate: {}", certificateId);
-        
+
         certificateServiceClient.voidCertificate(certificateId);
     }
 
     /**
      * Schedule settlement
      */
-    private SettlementScheduleResult scheduleSettlement(Transaction transaction, 
-                                                        EscrowAccount escrow) {
+    private SettlementScheduleResult scheduleSettlement(Transaction transaction,
+            EscrowAccount escrow) {
         return escrowService.scheduleSettlement(transaction, escrow);
     }
 
@@ -432,23 +442,22 @@ public class TransactionSagaService {
     /**
      * Send transaction notifications
      */
-    private void sendTransactionNotifications(Transaction transaction, 
-                                             CertificateResult certificate) {
+    private void sendTransactionNotifications(Transaction transaction,
+            CertificateResult certificate) {
         notificationServiceClient.sendTransactionNotification(
-            TransactionNotificationRequest.builder()
-                .transactionId(transaction.getTransactionId())
-                .buyerId(transaction.getBuyerId())
-                .sellerId(transaction.getSellerId())
-                .certificateUrl(certificate.getCertificateUrl())
-                .build()
-        );
+                TransactionNotificationRequest.builder()
+                        .transactionId(transaction.getTransactionId())
+                        .buyerId(transaction.getBuyerId())
+                        .sellerId(transaction.getSellerId())
+                        .certificateUrl(certificate.getCertificateUrl())
+                        .build());
     }
 
     /**
      * Record saga step execution
      */
-    private void recordSagaStep(Transaction transaction, String sagaId, 
-                                String stepName, int order, SagaStep.StepStatus status) {
+    private void recordSagaStep(Transaction transaction, String sagaId,
+            String stepName, int order, SagaStep.StepStatus status) {
         SagaStep step = SagaStep.builder()
                 .transaction(transaction)
                 .sagaId(sagaId)
@@ -459,7 +468,7 @@ public class TransactionSagaService {
                 .serviceName("TransactionService")
                 .methodName(stepName.toLowerCase())
                 .build();
-        
+
         sagaStepRepository.save(step);
     }
 
@@ -468,18 +477,18 @@ public class TransactionSagaService {
      */
     private void recordSagaFailure(Transaction transaction, String sagaId, String errorMessage) {
         List<SagaStep> steps = sagaStepRepository.findBySagaIdOrderByStepOrder(sagaId);
-        
+
         // Mark incomplete steps as failed
         steps.stream()
-            .filter(step -> step.getStatus() == SagaStep.StepStatus.PENDING ||
-                           step.getStatus() == SagaStep.StepStatus.IN_PROGRESS)
-            .forEach(step -> {
-                step.setStatus(SagaStep.StepStatus.FAILED);
-                step.setErrorMessage(errorMessage);
-                step.setFailedAt(LocalDateTime.now());
-                sagaStepRepository.save(step);
-            });
-        
+                .filter(step -> step.getStatus() == SagaStep.StepStatus.PENDING ||
+                        step.getStatus() == SagaStep.StepStatus.IN_PROGRESS)
+                .forEach(step -> {
+                    step.setStatus(SagaStep.StepStatus.FAILED);
+                    step.setErrorMessage(errorMessage);
+                    step.setFailedAt(LocalDateTime.now());
+                    sagaStepRepository.save(step);
+                });
+
         // Trigger compensation for completed steps
         compensateTransaction(transaction, sagaId);
     }
@@ -489,10 +498,10 @@ public class TransactionSagaService {
      */
     public void compensateTransaction(Transaction transaction, String sagaId) {
         log.info("Starting compensation for transaction: {}", transaction.getTransactionId());
-        
+
         List<SagaStep> stepsToCompensate = sagaStepRepository
-            .findStepsForCompensation(transaction.getTransactionId());
-        
+                .findStepsForCompensation(transaction.getTransactionId());
+
         // Execute compensation in reverse order
         for (SagaStep step : stepsToCompensate) {
             try {
@@ -506,7 +515,7 @@ public class TransactionSagaService {
             }
             sagaStepRepository.save(step);
         }
-        
+
         // Update transaction status
         transaction.setStatus(Transaction.TransactionStatus.REFUNDED);
         transactionRepository.save(transaction);

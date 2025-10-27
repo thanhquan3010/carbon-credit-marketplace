@@ -5,16 +5,14 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.1.5</version>
-        <relativePath/>
+        <groupId>com.carbonmarketplace</groupId>
+        <artifactId>carbon-credit-marketplace-backend</artifactId>
+        <version>1.0.0-SNAPSHOT</version>
+        <relativePath>../pom.xml</relativePath>
     </parent>
 
-    <groupId>com.carbonmarketplace</groupId>
     <artifactId>transaction-service</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <name>transaction-service</name>
+    <name>Transaction Service</name>
     <description>Transaction Service for Carbon Credit Marketplace</description>
 
     <properties>
